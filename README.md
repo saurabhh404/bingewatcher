@@ -1,0 +1,2 @@
+# bingewatcher
+Exploring DRF
