@@ -2,19 +2,19 @@ import traceback
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from watchlist.models import Movie
-from watchlist.api.serializers import MovieSerializer
+from watchlist_series.models import Series
+from watchlist_series.api.serializers import SeriesSerializer
 
 
 @api_view(["GET", "POST"])
-def movie_list(request):
+def entire_list(request):
     try:
         if request.method == "GET":
-            movie = Movie.objects.all()
-            serializer = MovieSerializer(movie, many=True)
+            series = Series.objects.all()
+            serializer = SeriesSerializer(series, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
         if request.method == "POST":
-            serializer = MovieSerializer(data=request.data)
+            serializer = SeriesSerializer(data=request.data)
             if serializer.is_valid():
                 serializer.save()
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -27,39 +27,34 @@ def movie_list(request):
         )
 
 
-@api_view(["GET", "PUT", "DELETE", "PATCH"])
-def movie_details(request, pk):
+@api_view(["GET", "PUT", "PATCH", "DELETE"])
+def series_details(request, pk):
     try:
-        movie = Movie.objects.get(pk=pk)
-
+        series = Series.objects.get(pk=pk)
         if request.method == "GET":
-            serializer = MovieSerializer(movie)
+            serializer = SeriesSerializer(series, many=False)
             return Response(serializer.data, status=status.HTTP_200_OK)
-        if request.method in ["PUT"]:
-            serializer = MovieSerializer(movie, data=request.data)
+        if request.method == "PUT":
+            serializer = SeriesSerializer(series, data=request.data)
             if serializer.is_valid():
                 serializer.save()
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
+                return Response(serializer.data, status=status.HTTP_200_OK)
             else:
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        if request.method == "PATCH":
-            serializer = MovieSerializer(movie, data=request.data, partial=True)
+        if request.method == 'PATCH':
+            serializer = SeriesSerializer(series, data=request.data, partial=True)
             if serializer.is_valid():
                 serializer.save()
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
+                return Response(serializer.data, status=status.HTTP_200_OK)
             else:
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
         if request.method == "DELETE":
-            movie.delete()
+            series.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
-
-    except Movie.DoesNotExist:
+    except Series.DoesNotExist:
         return Response(
             {"message": "Record not found"}, status=status.HTTP_404_NOT_FOUND
         )
-
     except Exception as ex:
         traceback.print_exc()
         return Response(
