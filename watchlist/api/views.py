@@ -5,16 +5,20 @@ from rest_framework import (
 )
 from rest_framework.views import APIView
 from rest_framework.response import Response
-
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
+from rest_framework.exceptions import ValidationError
 from watchlist.models import Watchlist, StreamPlatform, Review
 from watchlist.api.serializers import (
     WatchlistSerializer,
     StreamPlatformSerializer,
     ReviewSerializer,
 )
+from watchlist.api.permissions import AdminOrReadOnly, ReviewUserOrReadOnly
 
 
 class WatchlistListView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
     def get(self, request):
         try:
             watch_item = Watchlist.objects.all()
@@ -42,6 +46,8 @@ class WatchlistListView(APIView):
 
 
 class WatchlistDetailsView(APIView):
+    permission_classes = [AdminOrReadOnly]
+
     def get(self, request, pk):
         try:
             watch_item = Watchlist.objects.get(pk=pk)
@@ -223,6 +229,7 @@ class ReviewList(generics.ListAPIView):
 class ReviewDetails(generics.RetrieveUpdateDestroyAPIView):
     queryset = Review.objects.all()
     serializer_class = ReviewSerializer
+    permission_classes = [ReviewUserOrReadOnly]
 
 
 class ReviewCreate(generics.CreateAPIView):
@@ -231,4 +238,22 @@ class ReviewCreate(generics.CreateAPIView):
     def perform_create(self, serializer):
         pk = self.kwargs["pk"]
         item = Watchlist.objects.get(pk=pk)
-        serializer.save(watchlist=item)
+
+        review_user = self.request.user
+        review_queryset = Review.objects.filter(review_user=review_user, watchlist=item)
+        if review_queryset.exists():
+            raise ValidationError(
+                {"review_user": "You have already reviewed this item"}
+            )
+
+        if item.number_of_ratings == 0:
+            item.avg_rating = serializer.validated_data["rating"]
+            item.sum_of_ratings += serializer.validated_data["rating"]
+            item.number_of_ratings += 1
+        else:
+            item.sum_of_ratings += serializer.validated_data["rating"]
+            item.number_of_ratings += 1
+            item.avg_rating = item.sum_of_ratings / item.number_of_ratings
+        item.save()
+
+        serializer.save(watchlist=item, review_user=review_user)
