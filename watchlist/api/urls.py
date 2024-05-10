@@ -1,13 +1,12 @@
 from django.urls import path
-from watchlist.api.views import (
-    WatchlistListView,
-    WatchlistDetailsView,
-    StreamPlatformListView,
-    StreamPlatformDetailsView,
-    ReviewList,
-    ReviewDetails,
-    ReviewCreate,
-)
+
+from watchlist.api.views import ReviewCreate
+from watchlist.api.views import ReviewDetails
+from watchlist.api.views import ReviewList
+from watchlist.api.views import StreamPlatformDetailsView
+from watchlist.api.views import StreamPlatformListView
+from watchlist.api.views import WatchlistDetailsView
+from watchlist.api.views import WatchlistListView
 
 urlpatterns = [
     path(
@@ -26,12 +25,12 @@ urlpatterns = [
         name="stream-platform-list",
     ),
     path(
-        "stream/<int:pk>",
+        "stream/<int:pk>/",
         StreamPlatformDetailsView.as_view(),
         name="stream-platform-detail",
     ),
     path(
-        "review/<int:pk>",
+        "review/<int:pk>/",
         ReviewDetails.as_view(),
         name="review-detail",
     ),

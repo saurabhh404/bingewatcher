@@ -1,23 +1,25 @@
 import traceback
-from rest_framework import (
-    status,
-    generics,
-)
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
+
+from rest_framework import generics
+from rest_framework import status
 from rest_framework.exceptions import ValidationError
-from watchlist.models import Watchlist, StreamPlatform, Review
-from watchlist.api.serializers import (
-    WatchlistSerializer,
-    StreamPlatformSerializer,
-    ReviewSerializer,
-)
-from watchlist.api.permissions import AdminOrReadOnly, ReviewUserOrReadOnly
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from watchlist.api.permissions import AdminOrReadOnly
+from watchlist.api.permissions import ReviewUserOrReadOnly
+from watchlist.api.serializers import ReviewSerializer
+from watchlist.api.serializers import StreamPlatformSerializer
+from watchlist.api.serializers import WatchlistSerializer
+from watchlist.models import Review
+from watchlist.models import StreamPlatform
+from watchlist.models import Watchlist
 
 
 class WatchlistListView(APIView):
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [AdminOrReadOnly]
 
     def get(self, request):
         try:
@@ -34,10 +36,16 @@ class WatchlistListView(APIView):
         try:
             serializer = WatchlistSerializer(data=request.data)
             if serializer.is_valid():
+                if Watchlist.objects.filter(
+                    title=serializer.validated_data["title"]
+                ).exists():
+                    return Response(
+                        {"message": "Watchlist with this title already exists"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                 serializer.save()
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
-            else:
-                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Exception as ex:
             traceback.print_exc()
             return Response(
@@ -120,6 +128,8 @@ class WatchlistDetailsView(APIView):
 
 
 class StreamPlatformListView(APIView):
+    permission_classes = [AdminOrReadOnly]
+
     def get(self, request):
         try:
             stream_platform = StreamPlatform.objects.all()
@@ -147,6 +157,8 @@ class StreamPlatformListView(APIView):
 
 
 class StreamPlatformDetailsView(APIView):
+    permission_classes = [AdminOrReadOnly]
+
     def get(self, request, pk):
         try:
             stream_platform = StreamPlatform.objects.get(pk=pk)
@@ -231,9 +243,45 @@ class ReviewDetails(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ReviewSerializer
     permission_classes = [ReviewUserOrReadOnly]
 
+    def perform_update(self, serializer):
+        pk = self.kwargs["pk"]
+        try:
+            review_item = Review.objects.get(pk=pk)
+        except Review.DoesNotExist:
+            raise ValidationError(
+                {"message": "Record not found"}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        watchlist_item = Watchlist.objects.get(pk=review_item.watchlist.pk)
+        # print("[prev]watchlist_item.sum_of_ratings: ", watchlist_item.sum_of_ratings)
+
+        watchlist_item.sum_of_ratings = (
+            watchlist_item.sum_of_ratings
+            - review_item.rating
+            + serializer.validated_data["rating"]
+        )
+        # print("review_item.rating: ", review_item.rating)
+        # print(
+        #     "serializer.validated_data['rating']: ", serializer.validated_data["rating"]
+        # )
+        # print("watchlist_item.sum_of_ratings: ", watchlist_item.sum_of_ratings)
+        # print("[prev]watchlist_item.avg_rating: ", watchlist_item.avg_rating)
+        # print(
+        #     "[prev]watchlist_item.number_of_ratings: ", watchlist_item.number_of_ratings
+        # )
+
+        watchlist_item.avg_rating = (
+            watchlist_item.sum_of_ratings / watchlist_item.number_of_ratings
+        )
+        # print("watchlist_item.avg_rating: ", watchlist_item.avg_rating)
+
+        watchlist_item.save()
+        serializer.save(watchlist=watchlist_item)
+
 
 class ReviewCreate(generics.CreateAPIView):
     serializer_class = ReviewSerializer
+    permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
         pk = self.kwargs["pk"]
@@ -242,9 +290,7 @@ class ReviewCreate(generics.CreateAPIView):
         review_user = self.request.user
         review_queryset = Review.objects.filter(review_user=review_user, watchlist=item)
         if review_queryset.exists():
-            raise ValidationError(
-                {"review_user": "You have already reviewed this item"}
-            )
+            raise ValidationError({"message": "You have already reviewed this item"})
 
         if item.number_of_ratings == 0:
             item.avg_rating = serializer.validated_data["rating"]

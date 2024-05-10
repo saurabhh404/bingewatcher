@@ -1,5 +1,8 @@
 from rest_framework import serializers
-from watchlist.models import Watchlist, StreamPlatform, Review
+
+from watchlist.models import Review
+from watchlist.models import StreamPlatform
+from watchlist.models import Watchlist
 
 
 class ReviewSerializer(serializers.ModelSerializer):
